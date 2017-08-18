@@ -2,6 +2,7 @@ package transku
 
 import (
 	"github.com/WedgeNix/transKU/dictionary"
+	"github.com/WedgeNix/transKU/intlprods"
 
 	"github.com/WedgeNix/chapi"
 	"github.com/WedgeNix/gosetta"
@@ -38,30 +39,33 @@ func (t *Type) ReadChannelAdvisor() error {
 	return nil
 }
 
-// RegionData holds translate product data and the region number.
-type RegionData struct {
-	prods  []chapi.Product
-	region int
-}
-
-var regionLookup = map[language.Tag]int{
-	language.Chinese: 0,
-	language.French:  0,
-	language.German:  0,
-}
-
 // Translate translates ChannelAdvisor data from English to another language.
-func (t Type) Translate(dst language.Tag) (RegionData, error) {
+func (t Type) Translate(dst language.Tag) (*intlprods.Type, error) {
+	//
+	//
+	//
+
 	// t.ca.Parent(true)
 
-	data := RegionData{region: regionLookup[dst]}
+	data := intlprods.New(t.prods, dst)
 
 	dict := new(dictionary.Type)
-	dict.GoAddAttributes(t.prods)
-	dict.GoAddDescriptions(t.prods)
-	dict.GoAddTitles(t.prods)
 
+	// add product properties in parts to the dictionary
+	dict.GoAdd(t.prods)
+
+	// sets all entries in the dictionary to their respective translations
 	dict.GoSetAll(t.rose.MustTranslate)
+
+	//
+	//
+	//
+
+	prodsTrans := dict.GoTransAll(t.prods)
+
+	//
+	//
+	//
 
 	// desc := prod.Description
 	// html := regex.HTML.FindAllString(desc, -1)
@@ -87,10 +91,14 @@ func (t Type) Translate(dst language.Tag) (RegionData, error) {
 	// dollarsPerChar := 0.00002
 	// util.Log("Translation cost :: ", currency.USD.Amount(dollarsPerChar*float64(charCnt)))
 
+	//
+	//
+	//
+
 	return data, nil
 }
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
-func (t Type) WriteChannelAdvisor(data RegionData) error {
-	return t.ca.CSVify(data.prods, data.region) // should have a proper region read
+func (t Type) WriteChannelAdvisor(data intlprods.Type) error {
+	return t.ca.CSVify(data.prods, data.ID) // should have a proper region read
 }
