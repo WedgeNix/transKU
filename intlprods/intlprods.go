@@ -3,30 +3,18 @@ package intlprods
 import (
 	"strconv"
 	"strings"
-
-	"golang.org/x/text/language"
+	"sync"
 
 	"github.com/WedgeNix/chapi"
 )
 
-type region struct {
-	id    int
-	label string
-}
-
-var lookup = map[language.Tag]region{
-	language.Chinese: region{0, "Amazon Seller Central - CN"},
-	language.French:  region{0, "Amazon Seller Central - FR"},
-	language.German:  region{0, "Amazon Seller Central - DE"},
-}
-
+// Type holds info for international products.
 type Type struct {
-	prods         []chapi.Product
-	pres          []PreCSV
-	parentSkuDict map[int]string
-	ID            int
+	pres   []PreCSV
+	region int
 }
 
+// PreCSV is the look of what will be sent over to ChannelAdvisor regions.
 type PreCSV struct {
 	AuctionTitle        string
 	InventoryNumber     string
@@ -71,9 +59,12 @@ type PreCSV struct {
 	FeatureBullet6      string
 }
 
-func New(prods []chapi.Product, dst language.Tag) *Type {
+// New creates proper international products.
+func New(prods []chapi.Product, region int, label string) *Type {
 	t := new(Type)
-	t.prods = prods
+	t.region = region
+
+	ps := parentSKUs{}
 
 	for _, prod := range prods {
 		p := PreCSV{
@@ -90,8 +81,8 @@ func New(prods []chapi.Product, dst language.Tag) *Type {
 			RetailPrice:         strconv.FormatFloat(prod.RetailPrice, 'f', 2, 64),
 			ReceivedInInventory: prod.ReceivedDateUtc.String(),
 			RelationshipName:    prod.RelationshipName,
-			VariationParentSKU:  t.getVariationParentSKU(prod),
-			Labels:              lookup[dst].label,
+			VariationParentSKU:  ps.getVariationParentSKU(prod, prods),
+			Labels:              label,
 			Classification:      prod.Classification,
 		}
 		urls := []string{}
@@ -106,28 +97,130 @@ func New(prods []chapi.Product, dst language.Tag) *Type {
 	return t
 }
 
-func (t Type) getVariationParentSKU(prod chapi.Product) string {
-	sku, exists := t.parentSkuDict[prod.ParentProductID]
+// GetCSVLayout formats the data to suit a CSV layout and gives the region.
+func (t Type) GetCSVLayout() ([][]string, int) {
+	layout := make([][]string, len(t.pres)+1)
+	layout[0] = []string{
+		`Auction Title`,
+		`Inventory Number`,
+		`Item Create Date`,
+		`Weight`,
+		`UPC`,
+		`ASIN`,
+		`Description`,
+		`Brand`,
+		`Seller Cost`,
+		`Buy It Now Price`,
+		`Retail Price`,
+		`Picture URLs`,
+		`Received In Inventory`,
+		`Relationship Name`,
+		`Variation Parent SKU`,
+		`Labels`,
+		`Classification`,
+		`AMZ_Category`,
+		`AMZ_Color_Map`,
+		`AMZ_Item_Type`,
+		`AMZ_ProductIDType`,
+		`AMZClothingType`,
+		`AMZColor`,
+		`AMZDepartment`,
+		`AMZDescription`,
+		`AMZSize`,
+		`AMZTitle`,
+		`Apparel-Closure-Type`,
+		`Arm Length`,
+		`Band Material`,
+		`Bottom Style`,
+		`Bottoms Size (Men's)`,
+		`Bottoms Size (Women's)`,
+		`Boy's Clothing Type`,
+		`Clothing Type`,
+		`FeatureBullet1`,
+		`FeatureBullet2`,
+		`FeatureBullet3`,
+		`FeatureBullet4`,
+		`FeatureBullet5`,
+		`FeatureBullet6`,
+	}
+
+	work := sync.WaitGroup{}
+	work.Add(len(t.pres))
+
+	for i, pre := range t.pres {
+		go func(i int, pre PreCSV) {
+			defer work.Done()
+			layout[i] = []string{
+				pre.AuctionTitle,
+				pre.InventoryNumber,
+				pre.ItemCreateDate,
+				pre.Weight,
+				pre.UPC,
+				pre.ASIN,
+				pre.Description,
+				pre.Brand,
+				pre.SellerCost,
+				pre.BuyItNowPrice,
+				pre.RetailPrice,
+				pre.PictureURLs,
+				pre.ReceivedInInventory,
+				pre.RelationshipName,
+				pre.VariationParentSKU,
+				pre.Labels,
+				pre.Classification,
+				pre.AMZCategory,
+				pre.AMZColorMap,
+				pre.AMZItemType,
+				pre.AMZProductIDType,
+				pre.AMZClothingType,
+				pre.AMZColor,
+				pre.AMZDepartment,
+				pre.AMZDescription,
+				pre.AMZSize,
+				pre.AMZTitle,
+				pre.ApparelClosureType,
+				pre.ArmLength,
+				pre.BandMaterial,
+				pre.BottomStyle,
+				pre.BottomsSizeMens,
+				pre.BottomsSizeWomens,
+				pre.BoysClothingType,
+				pre.ClothingType,
+				pre.FeatureBullet1,
+				pre.FeatureBullet2,
+				pre.FeatureBullet3,
+				pre.FeatureBullet4,
+				pre.FeatureBullet5,
+				pre.FeatureBullet6,
+			}
+		}(i+1, pre)
+	}
+	work.Wait()
+
+	return layout, t.region
+}
+
+type parentSKUs map[int]string
+
+func (ps parentSKUs) getVariationParentSKU(prod chapi.Product, prods []chapi.Product) string {
+	sku, exists := ps[prod.ParentProductID]
 	if exists {
 		return sku
 	}
 
 	skuc := make(chan string)
 
-	for _, p := range t.prods {
-		go func(p chapi.Product) {
-			if prod.ParentProductID != p.ID {
-				return
-			}
-
-			skuc <- p.Sku
-			close(skuc)
-		}(p)
-	}
+	go func() {
+		for _, p := range prods {
+			go func(p chapi.Product) {
+				if prod.ParentProductID != p.ID {
+					return
+				}
+				skuc <- p.Sku
+				close(skuc)
+			}(p)
+		}
+	}()
 
 	return <-skuc
-}
-
-func (t Type) csv() {
-
 }

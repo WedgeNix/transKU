@@ -39,6 +39,17 @@ func (t *Type) ReadChannelAdvisor() error {
 	return nil
 }
 
+type region struct {
+	id    int
+	label string
+}
+
+var regions = map[language.Tag]region{
+	language.Chinese: region{12016078, "Amazon Seller Central - CN"},
+	language.French:  region{12015122, "Amazon Seller Central - FR"},
+	language.German:  region{12014987, "Amazon Seller Central - DE"},
+}
+
 // Translate translates ChannelAdvisor data from English to another language.
 func (t Type) Translate(dst language.Tag) (*intlprods.Type, error) {
 	//
@@ -47,58 +58,22 @@ func (t Type) Translate(dst language.Tag) (*intlprods.Type, error) {
 
 	// t.ca.Parent(true)
 
-	data := intlprods.New(t.prods, dst)
-
 	dict := new(dictionary.Type)
 
 	// add product properties in parts to the dictionary
 	dict.GoAdd(t.prods)
 
 	// sets all entries in the dictionary to their respective translations
-	dict.GoSetAll(t.rose.MustTranslate)
+	dict.GoFillAll(t.rose.MustTranslate)
 
-	//
-	//
-	//
+	newProds := dict.GoTransAll(t.prods)
 
-	prodsTrans := dict.GoTransAll(t.prods)
+	reg := regions[dst]
 
-	//
-	//
-	//
-
-	// desc := prod.Description
-	// html := regex.HTML.FindAllString(desc, -1)
-	// cleanDesc := htmlExpression.ReplaceAllString(desc, "<>")
-	// phrases := phraseExpression.FindAllString(cleanDesc, -1)
-
-	// cleanTrans := regex.Phrase.ReplaceAllStringFunc(cleanDesc, func(phrase string) string {
-	// 	return dict[phrase]
-	// })
-	// util.Log(cleanTrans)
-
-	// util.Log("this is the fully tagged, translated description")
-	// fullTrans := htmlExpression.ReplaceAllStringFunc(cleanTrans, func(s string) string {
-	// 	tag := html[0]  // head
-	// 	html = html[1:] // tail; shift
-	// 	return tag
-	// })
-	// util.Log(fullTrans)
-
-	// charCnt := 0
-	// hit := 0
-	// util.Log("len(map)=", len(dict), " [vs] hit=", hit)
-	// dollarsPerChar := 0.00002
-	// util.Log("Translation cost :: ", currency.USD.Amount(dollarsPerChar*float64(charCnt)))
-
-	//
-	//
-	//
-
-	return data, nil
+	return intlprods.New(newProds, reg.id, reg.label), nil
 }
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
-func (t Type) WriteChannelAdvisor(data intlprods.Type) error {
-	return t.ca.CSVify(data.prods, data.ID) // should have a proper region read
+func (t Type) WriteChannelAdvisor(ip intlprods.Type) error {
+	return t.ca.SendBinaryCSV(ip.GetCSVLayout())
 }
