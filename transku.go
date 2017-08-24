@@ -3,6 +3,7 @@ package transku
 import (
 	"github.com/WedgeNix/transKU/dictionary"
 	"github.com/WedgeNix/transKU/intlprods"
+	"github.com/WedgeNix/util"
 
 	"github.com/WedgeNix/chapi"
 	"github.com/WedgeNix/gosetta"
@@ -51,22 +52,33 @@ var regions = map[language.Tag]region{
 }
 
 // Translate translates ChannelAdvisor data from English to another language.
-func (t Type) Translate(dst language.Tag) (*intlprods.Type, error) {
+func (t Type) Translate(dst language.Tag) (intlprods.Type, error) {
 	//
 	//
 	//
+	t.rose.Destination(dst)
 
 	// t.ca.Parent(true)
 
-	dict := new(dictionary.Type)
+	dict := dictionary.New()
+
+	done := util.NewLoader("Adding words/phrases to dictionary")
 
 	// add product properties in parts to the dictionary
 	dict.GoAdd(t.prods)
+	done <- true
+
+	done = util.NewLoader("Translating words/phrases in dictionary")
 
 	// sets all entries in the dictionary to their respective translations
 	dict.GoFillAll(t.rose.MustTranslate)
+	done <- true
 
+	done = util.NewLoader("Translating products using dictionary")
+
+	// translates any matching word/phrases from products in dictionary
 	newProds := dict.GoTransAll(t.prods)
+	done <- true
 
 	reg := regions[dst]
 
@@ -75,5 +87,7 @@ func (t Type) Translate(dst language.Tag) (*intlprods.Type, error) {
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
 func (t Type) WriteChannelAdvisor(ip intlprods.Type) error {
+	done := util.NewLoader("Writing binary CSV to ChannelAdvisor")
+	defer func() { done <- true }()
 	return t.ca.SendBinaryCSV(ip.GetCSVLayout())
 }

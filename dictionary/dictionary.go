@@ -1,6 +1,7 @@
 package dictionary
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,8 +20,17 @@ type Type struct {
 	lookup map[string]string
 }
 
+func New() *Type {
+	return &Type{lookup: map[string]string{}}
+}
+
+func (dict *Type) String() string {
+	dict.jobs.Wait()
+	return fmt.Sprintln(dict.lookup)
+}
+
 var (
-	filterAttr = map[string]bool{
+	FilterAttr = map[string]bool{
 		`AMZ_Category`:           false,
 		`AMZ_Color_Map`:          false,
 		`AMZ_Item_Type`:          false,
@@ -48,7 +58,7 @@ var (
 	}
 )
 
-func (dict *Type) filter(p chapi.Product) []*string {
+func (dict *Type) filter(p *chapi.Product) []*string {
 	fill := []*string{
 	// &p.Title,
 	// &p.Sku,
@@ -68,9 +78,9 @@ func (dict *Type) filter(p chapi.Product) []*string {
 	// &p.Labels,
 	// &p.Classification,
 	}
-	for _, attr := range p.Attributes {
-		if filterAttr[attr.Name] {
-			fill = append(fill, &attr.Value)
+	for i := range p.Attributes {
+		if FilterAttr[p.Attributes[i].Name] {
+			fill = append(fill, &p.Attributes[i].Value)
 		}
 	}
 	return fill
@@ -81,10 +91,14 @@ func (dict *Type) GoAdd(prods []chapi.Product) {
 	dict.jobs.Add(len(prods))
 
 	for _, prod := range prods {
+		if !prod.IsParent {
+			dict.jobs.Done()
+			continue
+		}
 		go func(prod chapi.Product) {
 			defer dict.jobs.Done()
 
-			fields := dict.filter(prod)
+			fields := dict.filter(&prod)
 
 			for _, field := range fields {
 				dict.stripAndAddText(*field, prod)
@@ -96,47 +110,8 @@ func (dict *Type) GoAdd(prods []chapi.Product) {
 type bag struct {
 	items []string
 	tok   string
+	tlate bool
 }
-
-// type safebag struct {
-// 	unsafe_lock sync.Mutex
-// 	unsafe_bag  []string
-// 	tok         string
-// }
-
-// func (b *safebag) pop() string {
-// 	b.unsafe_lock.Lock()
-// 	defer b.unsafe_lock.Unlock()
-// 	head, newB := b.unsafe_bag[0], b.unsafe_bag[1:]
-// 	b.unsafe_bag = newB
-// 	return head
-// }
-
-// type safetoks struct {
-// 	unsafe_work sync.WaitGroup
-// 	unsafe_lock sync.Mutex
-// 	unsafe_toks string
-// }
-
-// func (t *safetoks) goswap(b *safebag) {
-// 	bc := len(b.unsafe_bag)
-// 	t.unsafe_work.Add(bc)
-
-// 	bags := make([]int, bc)
-
-// 	for range bags {
-// 		go func() {
-// 			defer t.unsafe_work.Done()
-// 			t.unsafe_lock.Lock()
-// 			defer t.unsafe_lock.Unlock()
-// 			t.unsafe_toks = strings.Replace(t.unsafe_toks, b.tok, b.pop(), 1)
-// 		}()
-// 	}
-// }
-// func (t *safetoks) get() string {
-// 	t.unsafe_work.Wait()
-// 	return t.unsafe_toks
-// }
 
 func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phrases bag, toks string) {
 	noTags := regex.HTML.ReplaceAllString(text, "<>")
@@ -154,7 +129,7 @@ func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phr
 		toks = regex.Phrase.ReplaceAllString(noTagsAndBrand, "{}")
 	}
 
-	phrases = bag{items: regex.Phrase.FindAllString(noTagsAndBrand, -1), tok: "{}"}
+	phrases = bag{items: regex.Phrase.FindAllString(noTagsAndBrand, -1), tok: "{}", tlate: true}
 	return
 }
 
@@ -180,6 +155,8 @@ func (dict *Type) stripAndAddText(text string, prod chapi.Product) {
 func (dict *Type) GoFillAll(f func(string) string) {
 	dict.jobs.Wait()
 
+	// fmt.Print("len(dict.lookup)=", len(dict.lookup))
+
 	dict.jobs.Add(len(dict.lookup))
 	for word := range dict.lookup {
 		go func(word string) {
@@ -190,8 +167,13 @@ func (dict *Type) GoFillAll(f func(string) string) {
 	dict.jobs.Wait()
 }
 
-func swapNShift(toks string, b bag) string {
+func (dict *Type) swapNShift(toks string, b bag) string {
 	for _, itm := range b.items {
+		if b.tlate {
+			dict.lock.RLock()
+			itm = dict.lookup[itm]
+			dict.lock.RUnlock()
+		}
 		toks = strings.Replace(toks, b.tok, itm, 1)
 	}
 	return toks
@@ -208,16 +190,16 @@ func (dict *Type) GoTransAll(prods []chapi.Product) []chapi.Product {
 		go func(i int, prod chapi.Product) {
 			defer dict.jobs.Done()
 
-			fields := dict.filter(prod)
+			fields := dict.filter(&prod)
 
 			for _, field := range fields {
 				tags, brands, phrases, toks := strip(*field, prod, false)
 
-				toks = swapNShift(toks, tags)
-				toks = swapNShift(toks, brands)
-				toks = swapNShift(toks, phrases)
+				toks = dict.swapNShift(toks, tags)
+				toks = dict.swapNShift(toks, brands)
+				toks = dict.swapNShift(toks, phrases)
 
-				*field = dict.lookup[toks]
+				*field = toks
 			}
 
 			newProds[i] = prod
