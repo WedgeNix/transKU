@@ -333,10 +333,12 @@ func (ps parentSKUs) getVariationParentSKU(prod chapi.Product, prods []chapi.Pro
 		p := p
 		misswg.Add(1)
 		go func() {
-			defer misswg.Done()
 			if prod.ParentProductID != p.ID {
+				miss <- 1 + <-miss
+				misswg.Done()
 				return
 			}
+			misswg.Done()
 			skuc <- p.Sku
 		}()
 	}
