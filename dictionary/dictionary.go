@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"golang.org/x/text/currency"
 
@@ -13,23 +12,34 @@ import (
 	"github.com/WedgeNix/chapi"
 )
 
+// Lookup is a dictionary file type.
+type Lookup map[string]string
+
 // Type holds the dictionary information.
 type Type struct {
-	jobs   sync.WaitGroup
-	lock   sync.RWMutex
-	lookup map[string]string
+	jobs         sync.WaitGroup
+	lock         sync.RWMutex
+	cache        Lookup
+	cacheCharCnt int
 }
 
-func New() *Type {
-	return &Type{lookup: map[string]string{}}
+// New creates a new dictionary controller.
+func New(cache ...Lookup) *Type {
+	t := &Type{cache: Lookup{}}
+	if len(cache) > 0 {
+		t.cache = cache[0]
+		t.cacheCharCnt = t.getCharCnt()
+	}
+	return t
 }
 
 func (dict *Type) String() string {
 	dict.jobs.Wait()
-	return fmt.Sprintln(dict.lookup)
+	return fmt.Sprintln(dict.cache)
 }
 
 var (
+	// FilterAttr is a mapping of to-translate attributes.
 	FilterAttr = map[string]bool{
 		`AMZ_Category`:           false,
 		`AMZ_Color_Map`:          false,
@@ -138,7 +148,7 @@ func (dict *Type) stripAndAddText(text string, prod chapi.Product) {
 
 	for _, phrase := range phrases.items {
 		dict.lock.RLock()
-		_, exists := dict.lookup[phrase]
+		_, exists := dict.cache[phrase]
 		dict.lock.RUnlock()
 
 		if exists {
@@ -146,32 +156,52 @@ func (dict *Type) stripAndAddText(text string, prod chapi.Product) {
 		}
 
 		dict.lock.Lock()
-		dict.lookup[phrase] = phrase
+		dict.cache[phrase] = ""
 		dict.lock.Unlock()
 	}
 }
 
 // GoFillAll sets every entry in the dictionary using the passed-in function (concurrently).
-func (dict *Type) GoFillAll(f func(string) string) {
+func (dict *Type) GoFillAll(cacheMiss func(string) string) {
 	dict.jobs.Wait()
 
-	// fmt.Print("len(dict.lookup)=", len(dict.lookup))
+	newEntries := make(chan Lookup, 1)
+	newEntries <- Lookup{}
 
-	dict.jobs.Add(len(dict.lookup))
-	for word := range dict.lookup {
-		go func(word string) {
+	fmt.Println(`len(dict.cache)=`, len(dict.cache))
+	for word, tlate := range dict.cache {
+		if len(tlate) > 0 {
+			// fmt.Print(`O`)
+			continue
+		}
+
+		word := word
+
+		dict.jobs.Add(1)
+		go func() {
 			defer dict.jobs.Done()
-			dict.lookup[word] = f(word)
-		}(word)
+			// fmt.Print(`X`)
+
+			tlate := cacheMiss(word)
+			// fmt.Print(word + `>>` + tlate)
+
+			e := <-newEntries
+			e[word] = tlate
+			newEntries <- e
+		}()
 	}
 	dict.jobs.Wait()
+
+	for word, tlate := range <-newEntries {
+		dict.cache[word] = tlate
+	}
 }
 
 func (dict *Type) swapNShift(toks string, b bag) string {
 	for _, itm := range b.items {
 		if b.tlate {
 			dict.lock.RLock()
-			itm = dict.lookup[itm]
+			itm = dict.cache[itm]
 			dict.lock.RUnlock()
 		}
 		toks = strings.Replace(toks, b.tok, itm, 1)
@@ -210,17 +240,27 @@ func (dict *Type) GoTransAll(prods []chapi.Product) []chapi.Product {
 	return newProds
 }
 
-// GoGetPrice counts all dictionary word lengths, returning the cost exchange.
-func (dict *Type) GoGetPrice() currency.Amount {
+// SHOULD CORRECT FOR DIFFERENCE BETWEEN LOADED CACHE AND NEW ENTRIES.
+// SHOULD CORRECT FOR DIFFERENCE BETWEEN LOADED CACHE AND NEW ENTRIES.
+// SHOULD CORRECT FOR DIFFERENCE BETWEEN LOADED CACHE AND NEW ENTRIES.
+
+func (dict *Type) getNewCharCnt() int {
+	return dict.getCharCnt() - dict.cacheCharCnt
+}
+
+// GetPrice counts all dictionary word lengths, returning the cost exchange.
+func (dict *Type) GetPrice() currency.Amount {
+	return currency.USD.Amount(0.00002 * float64(dict.getNewCharCnt()))
+}
+
+func (dict *Type) getCharCnt() int {
 	dict.jobs.Wait()
 
-	charCnt := uint64(0)
+	charCnt := 0
 
-	for word := range dict.lookup {
-		go func(word string) {
-			atomic.AddUint64(&charCnt, uint64(len(word)))
-		}(word)
+	for word := range dict.cache {
+		charCnt += len(word)
 	}
 
-	return currency.USD.Amount(0.00002 * float64(atomic.LoadUint64(&charCnt)))
+	return charCnt
 }

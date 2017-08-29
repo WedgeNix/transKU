@@ -7,10 +7,10 @@ const (
 	HTMLPattern = `<[^<>]*>`
 
 	// WordPattern catches alphabetical words in english.
-	WordPattern = `[A-Za-z'-]+`
+	WordPattern = `[A-Za-z'][A-Za-z'-]*[A-Za-z']{2,}|[AEIOUaeiou]|[A-Za-z']{2,}`
 
 	// PhrasePattern catches phrases at a time.
-	PhrasePattern = `(` + WordPattern + `)` + `( ` + WordPattern + `)*`
+	PhrasePattern = `(` + WordPattern + `)` + `( (` + WordPattern + `))*`
 )
 
 var (

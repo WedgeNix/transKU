@@ -1,6 +1,11 @@
 package transku
 
 import (
+	"encoding/gob"
+	"fmt"
+	"os"
+
+	"github.com/WedgeNix/awsapi"
 	"github.com/WedgeNix/transKU/dictionary"
 	"github.com/WedgeNix/transKU/intlprods"
 	"github.com/WedgeNix/util"
@@ -14,80 +19,252 @@ import (
 type Type struct {
 	ca    *chapi.CaObj
 	prods []chapi.Product
+	aws   *awsapi.Controller
 	rose  *gosetta.Rose
 }
 
-// New creates a new instance for translating English ChannelAdvisor data.
-func New() (*Type, error) {
+type region struct {
+	id      int
+	label   string
+	awsDict string
+}
+
+var regions = map[language.Tag]region{
+	language.Chinese: region{12016078, "Amazon Seller Central - CN", "cn.gob"},
+	language.French:  region{12015122, "Amazon Seller Central - FR", "fr.gob"},
+	language.German:  region{12014987, "Amazon Seller Central - DE", "de.gob"},
+}
+
+// InitChapi creates a new instance for translating English ChannelAdvisor data.
+func InitChapi() (*Type, error) {
+
+	done := util.NewLoader("Initializing transKU")
 	ca, err := chapi.New()
 	if err != nil {
 		return nil, err
 	}
+	done <- true
+
+	return &Type{ca: ca}, nil
+}
+
+func (t *Type) InitAwsapi() error {
+
+	aws, err := awsapi.New()
+	if err != nil {
+		return err
+	}
+	t.aws = aws
+
+	return nil
+}
+
+func (t *Type) InitGosetta() error {
+
 	rose, err := gosetta.New(language.English)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Type{ca, nil, rose}, nil
+	t.rose = rose
+
+	return nil
 }
 
 // ReadChannelAdvisor reads ChannelAdvisor product information in for parsing.
 func (t *Type) ReadChannelAdvisor() error {
-	prods, err := t.ca.GetCAData()
-	if err != nil {
-		return err
+
+	fnm := "prods.gob"
+
+	f, err := os.Open(fnm)
+	if err == nil {
+
+		done := util.NewLoader("Decoding product data from '" + fnm + "'")
+		f, err := os.Open(fnm)
+		if err != nil {
+			return err
+		}
+		d := gob.NewDecoder(f)
+		err = d.Decode(&t.prods)
+		if err != nil {
+			return err
+		}
+		done <- true
+
+	} else {
+
+		f, err = os.Create(fnm)
+		if err != nil {
+			return err
+		}
+
+		done := util.NewLoader("Reading product data from ChannelAdvisor")
+		prods, err := t.ca.GetCAData()
+		if err != nil {
+			return err
+		}
+		t.prods = prods
+		done <- true
+
+		done = util.NewLoader("Encoding product data to '" + fnm + "'")
+		e := gob.NewEncoder(f)
+		err = e.Encode(prods)
+		if err != nil {
+			return err
+		}
+		done <- true
 	}
-	t.prods = prods
+
 	return nil
 }
 
-type region struct {
-	id    int
-	label string
-}
+// ReadDictFromAWS reads a cached dictionary from AWS.
+// func (t *Type) ReadDictFromAWS(dst language.Tag) error {
 
-var regions = map[language.Tag]region{
-	language.Chinese: region{12016078, "Amazon Seller Central - CN"},
-	language.French:  region{12015122, "Amazon Seller Central - FR"},
-	language.German:  region{12014987, "Amazon Seller Central - DE"},
-}
+// 	fnm := regions[dst].awsDict
 
-// Translate translates ChannelAdvisor data from English to another language.
-func (t Type) Translate(dst language.Tag) (intlprods.Type, error) {
-	//
-	//
-	//
+// 	if _, err := os.Stat(fnm); os.IsExist(err) {
+
+// 		done := util.NewLoader("Decoding dictionary from '" + fnm + "'")
+// 		f, err := os.Open(regions[dst].awsDict)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		d := gob.NewDecoder(f)
+// 		err = d.Decode(&t.dict)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		done <- true
+
+// 	} else {
+
+// 		f, err := os.Create(fnm)
+// 		if err != nil {
+// 			return err
+// 		}
+
+// 		done := util.NewLoader("Reading dictionary from AWS")
+// 		err = t.aws.Read("transku/"+fnm, encdec.Gob, &t.dict)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		done <- true
+
+// 		done = util.NewLoader("Encoding dictionary to '" + fnm + "'")
+// 		e := gob.NewEncoder(f)
+// 		err = e.Encode(t.dict)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		done <- true
+// 	}
+
+// 	return nil
+// }
+
+// WriteDictToAWS writes a cached dictionary to AWS.
+// func (t *Type) WriteDictToAWS(dst language.Tag) error {
+
+// 	done := util.NewLoader("Writing dictionary to AWS")
+// 	err := t.aws.Write("transku/"+regions[dst].awsDict, encdec.Gob, t.dict)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	done <- true
+
+// 	return nil
+// }
+
+// CreateDict creates and translates a dictionary.
+func (t Type) CreateDict(dst language.Tag) (*dictionary.Type, error) {
+
+	fnm := regions[dst].awsDict
+	dict := dictionary.Lookup{}
+
+	f, err := os.Open(fnm)
+	if err == nil {
+
+		done := util.NewLoader("Decoding dictionary from '" + fnm + "'")
+		d := gob.NewDecoder(f)
+		err = d.Decode(&dict)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+		done <- true
+
+	} else {
+
+		done := util.NewLoader("Reading dictionary from AWS")
+		err = t.aws.Read("transku/"+fnm, &dict)
+		if err != nil {
+			return nil, err
+		}
+		done <- true
+	}
+
+	done := util.NewLoader("Initializing dictionary")
+	d := dictionary.New(dict)
+	done <- true
+
+	done = util.NewLoader("Adding words/phrases to dictionary")
+	d.GoAdd(t.prods)
+	done <- true
+
+	fmt.Println(d.GetPrice())
+
+	done = util.NewLoader("Translating words in dictionary")
 	t.rose.Destination(dst)
-
-	// t.ca.Parent(true)
-
-	dict := dictionary.New()
-
-	done := util.NewLoader("Adding words/phrases to dictionary")
-
-	// add product properties in parts to the dictionary
-	dict.GoAdd(t.prods)
+	d.GoFillAll(t.rose.MustTranslate)
 	done <- true
 
-	done = util.NewLoader("Translating words/phrases in dictionary")
-
-	// sets all entries in the dictionary to their respective translations
-	dict.GoFillAll(t.rose.MustTranslate)
+	done = util.NewLoader("Encoding dictionary to '" + fnm + "'")
+	f, err = os.Create(fnm)
+	if err != nil {
+		return nil, err
+	}
+	e := gob.NewEncoder(f)
+	err = e.Encode(dict)
+	if err != nil {
+		return nil, err
+	}
 	done <- true
 
-	done = util.NewLoader("Translating products using dictionary")
+	done = util.NewLoader("Writing dictionary to AWS")
+	err = t.aws.Write("transku/"+fnm, dict)
+	if err != nil {
+		return nil, err
+	}
+	done <- true
 
-	// translates any matching word/phrases from products in dictionary
+	return d, nil
+}
+
+// ApplyDict translates ChannelAdvisor data from English to another language.
+func (t Type) ApplyDict(dict *dictionary.Type, dst language.Tag) intlprods.Type {
+
+	done := util.NewLoader("Translating products using dictionary")
 	newProds := dict.GoTransAll(t.prods)
 	done <- true
 
 	reg := regions[dst]
 
-	return intlprods.New(newProds, reg.id, reg.label), nil
+	done = util.NewLoader("Converting translated to international format")
+	ip := intlprods.New(newProds, reg.id, reg.label)
+	done <- true
+
+	return ip
 }
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
 func (t Type) WriteChannelAdvisor(ip intlprods.Type) error {
+
 	done := util.NewLoader("Writing binary CSV to ChannelAdvisor")
-	defer func() { done <- true }()
-	return t.ca.SendBinaryCSV(ip.GetCSVLayout())
+	err := t.ca.SendBinaryCSV(ip.GetCSVLayout())
+	if err != nil {
+		return err
+	}
+	done <- true
+
+	return nil
 }
