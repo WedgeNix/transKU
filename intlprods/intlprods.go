@@ -65,16 +65,7 @@ func New(prods []chapi.Product, region int, label string) Type {
 
 	ps := parentSKUs{}
 
-	// msg := func(i int, x string) {
-	// 	if i == 434 {
-	// 		fmt.Println(x)
-	// 	}
-	// }
-
-	// done := util.NewLoader("Populating pre-CSV with translated products")
 	for _, prod := range prods {
-		// fmt.Println(i+1, `/`, len(prods))
-		// msg(i, "getVariationParentSKU")
 		p := PreCSV{
 			AuctionTitle:        prod.Title,
 			InventoryNumber:     prod.Sku,
@@ -94,13 +85,11 @@ func New(prods []chapi.Product, region int, label string) Type {
 			Classification:      prod.Classification,
 		}
 		urls := []string{}
-		// msg(i, "p.PictureURLs")
 		for _, img := range prod.Images {
 			urls = append(urls, img.URL)
 		}
 		p.PictureURLs = `"` + strings.Join(urls, ",") + `"`
 
-		// msg(i, "prod.Attributes")
 		for _, attr := range prod.Attributes {
 			switch attr.Name {
 			case `AMZ_Category`:
@@ -156,7 +145,6 @@ func New(prods []chapi.Product, region int, label string) Type {
 
 		t.pres = append(t.pres, p)
 	}
-	// done <- true
 
 	return t
 }
@@ -345,7 +333,7 @@ func (ps parentSKUs) getVariationParentSKU(prod chapi.Product, prods []chapi.Pro
 
 	misswg.Wait()
 	if len(prods) == <-miss {
-		panic("ParentProductID & ID match never found")
+		return ""
 	}
 
 	return <-skuc

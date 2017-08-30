@@ -24,9 +24,9 @@ type Type struct {
 }
 
 type region struct {
-	id      int
-	label   string
-	awsDict string
+	ID    int
+	Label string
+	Dict  string
 }
 
 var regions = map[language.Tag]region{
@@ -90,12 +90,15 @@ func (t *Type) ReadChannelAdvisor() error {
 		}
 		done <- true
 
-	} else {
+		// for _, t := range t.prods {
+		// 	if t.Sku != "FM4048-RDBK-One Size" {
+		// 		continue
+		// 	}
+		// 	panic("found")
+		// }
+		// panic("not found")
 
-		f, err = os.Create(fnm)
-		if err != nil {
-			return err
-		}
+	} else {
 
 		done := util.NewLoader("Reading product data from ChannelAdvisor")
 		prods, err := t.ca.GetCAData()
@@ -104,6 +107,11 @@ func (t *Type) ReadChannelAdvisor() error {
 		}
 		t.prods = prods
 		done <- true
+
+		f, err = os.Create(fnm)
+		if err != nil {
+			return err
+		}
 
 		done = util.NewLoader("Encoding product data to '" + fnm + "'")
 		e := gob.NewEncoder(f)
@@ -120,12 +128,12 @@ func (t *Type) ReadChannelAdvisor() error {
 // ReadDictFromAWS reads a cached dictionary from AWS.
 // func (t *Type) ReadDictFromAWS(dst language.Tag) error {
 
-// 	fnm := regions[dst].awsDict
+// 	fnm := regions[dst].Dict
 
 // 	if _, err := os.Stat(fnm); os.IsExist(err) {
 
 // 		done := util.NewLoader("Decoding dictionary from '" + fnm + "'")
-// 		f, err := os.Open(regions[dst].awsDict)
+// 		f, err := os.Open(regions[dst].Dict)
 // 		if err != nil {
 // 			return err
 // 		}
@@ -166,7 +174,7 @@ func (t *Type) ReadChannelAdvisor() error {
 // func (t *Type) WriteDictToAWS(dst language.Tag) error {
 
 // 	done := util.NewLoader("Writing dictionary to AWS")
-// 	err := t.aws.Write("transku/"+regions[dst].awsDict, encdec.Gob, t.dict)
+// 	err := t.aws.Write("transku/"+regions[dst].Dict, encdec.Gob, t.dict)
 // 	if err != nil {
 // 		return err
 // 	}
@@ -178,7 +186,7 @@ func (t *Type) ReadChannelAdvisor() error {
 // CreateDict creates and translates a dictionary.
 func (t Type) CreateDict(dst language.Tag) (*dictionary.Type, error) {
 
-	fnm := regions[dst].awsDict
+	fnm := regions[dst].Dict
 	dict := dictionary.Lookup{}
 
 	f, err := os.Open(fnm)
@@ -250,7 +258,7 @@ func (t Type) ApplyDict(dict *dictionary.Type, dst language.Tag) intlprods.Type 
 	reg := regions[dst]
 
 	done = util.NewLoader("Converting translated to international format")
-	ip := intlprods.New(newProds, reg.id, reg.label)
+	ip := intlprods.New(newProds, reg.ID, reg.Label)
 	done <- true
 
 	return ip
