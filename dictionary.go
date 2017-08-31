@@ -1,39 +1,24 @@
-package dictionary
+package transku
 
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"golang.org/x/text/currency"
-
-	"github.com/WedgeNix/transKU/regex"
 
 	"github.com/WedgeNix/chapi"
 )
 
-// Lookup is a dictionary file type.
-type Lookup map[string]string
-
-// Type holds the dictionary information.
-type Type struct {
-	jobs         sync.WaitGroup
-	lock         sync.RWMutex
-	cache        Lookup
-	cacheCharCnt int
-}
-
-// New creates a new dictionary controller.
-func New(cache ...Lookup) *Type {
-	t := &Type{cache: Lookup{}}
+func newDictionary(cache ...lookup) *Dictionary {
+	dict := &Dictionary{cache: lookup{}}
 	if len(cache) > 0 {
-		t.cache = cache[0]
-		t.cacheCharCnt = t.getCharCnt()
+		dict.cache = cache[0]
+		dict.cacheCharCnt = dict.getCharCnt()
 	}
-	return t
+	return dict
 }
 
-func (dict *Type) String() string {
+func (dict *Dictionary) String() string {
 	dict.jobs.Wait()
 	return fmt.Sprintln(dict.cache)
 }
@@ -68,7 +53,7 @@ var (
 	}
 )
 
-func (dict *Type) filter(p *chapi.Product) []*string {
+func (dict *Dictionary) filter(p *chapi.Product) []*string {
 	fill := []*string{
 	// &p.Title,
 	// &p.Sku,
@@ -96,8 +81,8 @@ func (dict *Type) filter(p *chapi.Product) []*string {
 	return fill
 }
 
-// GoAdd adds specific product fields into the dictionary (concurrently).
-func (dict *Type) GoAdd(prods []chapi.Product) {
+// GoAdd adds specific product fields into the Dictionary (concurrently).
+func (dict *Dictionary) GoAdd(prods []chapi.Product) {
 	dict.jobs.Add(len(prods))
 
 	for _, prod := range prods {
@@ -117,18 +102,12 @@ func (dict *Type) GoAdd(prods []chapi.Product) {
 	}
 }
 
-type bag struct {
-	items []string
-	tok   string
-	tlate bool
-}
-
 func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phrases bag, toks string) {
-	noTags := regex.HTML.ReplaceAllString(text, "<>")
+	noTags := htmlRegex.ReplaceAllString(text, "<>")
 	noTagsAndBrand := strings.Replace(noTags, prod.Brand, "[]", -1)
 
 	if !onlyPhrases { // efficiency
-		tags = bag{items: regex.HTML.FindAllString(text, -1), tok: "<>"}
+		tags = bag{items: htmlRegex.FindAllString(text, -1), tok: "<>"}
 		brandCnt := strings.Count(noTags, prod.Brand)
 		brndz := []string{}
 		brandRng := make([]int, brandCnt)
@@ -136,14 +115,14 @@ func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phr
 			brndz = append(brndz, prod.Brand)
 		}
 		brands = bag{items: brndz, tok: "[]"}
-		toks = regex.Phrase.ReplaceAllString(noTagsAndBrand, "{}")
+		toks = phraseRegex.ReplaceAllString(noTagsAndBrand, "{}")
 	}
 
-	phrases = bag{items: regex.Phrase.FindAllString(noTagsAndBrand, -1), tok: "{}", tlate: true}
+	phrases = bag{items: phraseRegex.FindAllString(noTagsAndBrand, -1), tok: "{}", tlate: true}
 	return
 }
 
-func (dict *Type) stripAndAddText(text string, prod chapi.Product) {
+func (dict *Dictionary) stripAndAddText(text string, prod chapi.Product) {
 	_, _, phrases, _ := strip(text, prod, true)
 
 	for _, phrase := range phrases.items {
@@ -161,12 +140,12 @@ func (dict *Type) stripAndAddText(text string, prod chapi.Product) {
 	}
 }
 
-// GoFillAll sets every entry in the dictionary using the passed-in function (concurrently).
-func (dict *Type) GoFillAll(cacheMiss func(string) string) {
+// GoFillAll sets every entry in the Dictionary using the passed-in function (concurrently).
+func (dict *Dictionary) GoFillAll(cacheMiss func(string) string) {
 	dict.jobs.Wait()
 
-	newEntries := make(chan Lookup, 1)
-	newEntries <- Lookup{}
+	newEntries := make(chan lookup, 1)
+	newEntries <- lookup{}
 
 	fmt.Println(`len(dict.cache)=`, len(dict.cache))
 	for word, tlate := range dict.cache {
@@ -197,7 +176,7 @@ func (dict *Type) GoFillAll(cacheMiss func(string) string) {
 	}
 }
 
-func (dict *Type) swapNShift(toks string, b bag) string {
+func (dict *Dictionary) swapNShift(toks string, b bag) string {
 	for _, itm := range b.items {
 		if b.tlate {
 			dict.lock.RLock()
@@ -210,7 +189,7 @@ func (dict *Type) swapNShift(toks string, b bag) string {
 }
 
 // GoTransAll combs through products and fills up a new version with specifics translated.
-func (dict *Type) GoTransAll(prods []chapi.Product) []chapi.Product {
+func (dict *Dictionary) GoTransAll(prods []chapi.Product) []chapi.Product {
 	dict.jobs.Wait()
 
 	newProds := make([]chapi.Product, len(prods))
@@ -244,16 +223,16 @@ func (dict *Type) GoTransAll(prods []chapi.Product) []chapi.Product {
 // SHOULD CORRECT FOR DIFFERENCE BETWEEN LOADED CACHE AND NEW ENTRIES.
 // SHOULD CORRECT FOR DIFFERENCE BETWEEN LOADED CACHE AND NEW ENTRIES.
 
-func (dict *Type) getNewCharCnt() int {
+func (dict *Dictionary) getNewCharCnt() int {
 	return dict.getCharCnt() - dict.cacheCharCnt
 }
 
-// GetPrice counts all dictionary word lengths, returning the cost exchange.
-func (dict *Type) GetPrice() currency.Amount {
+// GetPrice counts all Dictionary word lengths, returning the cost exchange.
+func (dict *Dictionary) GetPrice() currency.Amount {
 	return currency.USD.Amount(0.00002 * float64(dict.getNewCharCnt()))
 }
 
-func (dict *Type) getCharCnt() int {
+func (dict *Dictionary) getCharCnt() int {
 	dict.jobs.Wait()
 
 	charCnt := 0

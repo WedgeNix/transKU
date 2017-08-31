@@ -1,4 +1,4 @@
-package intlprods
+package transku
 
 import (
 	"strconv"
@@ -8,10 +8,10 @@ import (
 	"github.com/WedgeNix/chapi"
 )
 
-// Type holds info for international products.
-type Type struct {
-	pres   []PreCSV
-	region int
+// IntlProds holds info for international products.
+type IntlProds struct {
+	pres      []PreCSV
+	profileID int
 }
 
 // PreCSV is the look of what will be sent over to ChannelAdvisor regions.
@@ -60,8 +60,8 @@ type PreCSV struct {
 }
 
 // New creates proper international products.
-func New(prods []chapi.Product, region int, label string) Type {
-	t := Type{region: region}
+func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds {
+	ip := IntlProds{profileID: profileID}
 
 	ps := parentSKUs{}
 
@@ -143,15 +143,15 @@ func New(prods []chapi.Product, region int, label string) Type {
 			}
 		}
 
-		t.pres = append(t.pres, p)
+		ip.pres = append(ip.pres, p)
 	}
 
-	return t
+	return ip
 }
 
-// GetCSVLayout formats the data to suit a CSV layout and gives the region.
-func (t Type) GetCSVLayout() ([][]string, int) {
-	layout := make([][]string, len(t.pres)+1)
+// GetCSVLayout formats the data to suit a CSV layout and gives the profileID.
+func (ip IntlProds) GetCSVLayout() ([][]string, int) {
+	layout := make([][]string, len(ip.pres)+1)
 	layout[0] = []string{
 		`Auction Title`,
 		`Inventory Number`,
@@ -221,9 +221,9 @@ func (t Type) GetCSVLayout() ([][]string, int) {
 	}
 
 	work := sync.WaitGroup{}
-	work.Add(len(t.pres))
+	work.Add(len(ip.pres))
 
-	for i, pre := range t.pres {
+	for i, pre := range ip.pres {
 		go func(i int, pre PreCSV) {
 			defer work.Done()
 			layout[i] = []string{
@@ -297,7 +297,7 @@ func (t Type) GetCSVLayout() ([][]string, int) {
 	}
 	work.Wait()
 
-	return layout, t.region
+	return layout, ip.profileID
 }
 
 type parentSKUs map[int]string

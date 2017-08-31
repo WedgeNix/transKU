@@ -1,4 +1,4 @@
-package regex
+package transku
 
 import "regexp"
 
@@ -15,8 +15,8 @@ const (
 
 var (
 	// HTML is the regular expression compiled.
-	HTML = regexp.MustCompile(HTMLPattern)
+	htmlRegex = regexp.MustCompile(HTMLPattern)
 
 	// Phrase is the regular expression compiled.
-	Phrase = regexp.MustCompile(PhrasePattern)
+	phraseRegex = regexp.MustCompile(PhrasePattern)
 )
