@@ -2,6 +2,7 @@ package transku
 
 import (
 	"sync"
+	"time"
 
 	"github.com/WedgeNix/awsapi"
 	"github.com/WedgeNix/chapi"
@@ -17,10 +18,11 @@ type Region struct {
 
 // TransKU holds transKU controller data.
 type TransKU struct {
-	ca    *chapi.CaObj
-	prods []chapi.Product
-	aws   *awsapi.Controller
-	rose  *gosetta.Rose
+	ca         *chapi.CaObj
+	createDate time.Time
+	prods      []chapi.Product
+	aws        *awsapi.Controller
+	rose       *gosetta.Rose
 }
 
 // Dictionary holds the dictionary information.

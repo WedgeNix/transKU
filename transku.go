@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/WedgeNix/awsapi"
 	"github.com/WedgeNix/util"
@@ -15,7 +16,7 @@ import (
 )
 
 // InitChapi creates a new instance for translating English ChannelAdvisor data.
-func InitChapi() (*TransKU, error) {
+func InitChapi(start time.Time) (*TransKU, error) {
 	done := util.NewLoader("Initializing transKU")
 	ca, err := chapi.New()
 	if err != nil {
@@ -23,7 +24,7 @@ func InitChapi() (*TransKU, error) {
 	}
 	done <- true
 
-	return &TransKU{ca: ca}, nil
+	return &TransKU{ca: ca, createDate: start}, nil
 }
 
 // InitAwsapi initializes Awsapi right before point needed.
@@ -75,7 +76,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 		// panic("not found")
 	} else {
 		done := util.NewLoader("Reading product data from ChannelAdvisor")
-		prods, err := t.ca.GetCAData()
+		prods, err := t.ca.GetCAData(t.createDate)
 		if err != nil {
 			return err
 		}
