@@ -56,24 +56,12 @@ func (t *TransKU) ReadChannelAdvisor() error {
 	f, err := os.Open(fnm)
 	if err == nil {
 		done := util.NewLoader("Decoding product data from '" + fnm + "'")
-		f, err := os.Open(fnm)
-		if err != nil {
-			return err
-		}
 		d := gob.NewDecoder(f)
 		err = d.Decode(&t.prods)
 		if err != nil {
 			return err
 		}
 		done <- true
-
-		// for _, t := range t.prods {
-		// 	if t.Sku != "FM4048-RDBK-One Size" {
-		// 		continue
-		// 	}
-		// 	panic("found")
-		// }
-		// panic("not found")
 	} else {
 		done := util.NewLoader("Reading product data from ChannelAdvisor")
 		prods, err := t.ca.GetCAData(t.createDate)
