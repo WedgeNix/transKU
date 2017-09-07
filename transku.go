@@ -17,12 +17,12 @@ import (
 
 // InitChapi creates a new instance for translating English ChannelAdvisor data.
 func InitChapi(start time.Time) (*TransKU, error) {
-	done := util.NewLoader("Initializing transKU", true)
+	util.Log("Initializing transKU" + "...")
 	ca, err := chapi.New()
 	if err != nil {
 		return nil, err
 	}
-	done <- true
+	util.Log("Initializing transKU" + " !")
 
 	return &TransKU{ca: ca, createDate: start}, nil
 }
@@ -55,34 +55,34 @@ func (t *TransKU) ReadChannelAdvisor() error {
 
 	f, err := os.Open(fnm)
 	if err == nil {
-		done := util.NewLoader("Decoding product data from '"+fnm+"'", true)
+		util.Log("Decoding product data from '" + fnm + "'" + "...")
 		d := gob.NewDecoder(f)
 		err = d.Decode(&t.prods)
 		if err != nil {
 			return err
 		}
-		done <- true
+		util.Log("Decoding product data from '" + fnm + "'" + " !")
 	} else {
-		done := util.NewLoader("Reading product data from ChannelAdvisor", true)
+		util.Log("Reading product data from ChannelAdvisor" + "...")
 		prods, err := t.ca.GetCAData(t.createDate)
 		if err != nil {
 			return err
 		}
 		t.prods = prods
-		done <- true
+		util.Log("Reading product data from ChannelAdvisor" + " !")
 
 		f, err = os.Create(fnm)
 		if err != nil {
 			return err
 		}
 
-		done = util.NewLoader("Encoding product data to '"+fnm+"'", true)
+		util.Log("Encoding product data to '" + fnm + "'" + "...")
 		e := gob.NewEncoder(f)
 		err = e.Encode(prods)
 		if err != nil {
 			return err
 		}
-		done <- true
+		util.Log("Encoding product data to '" + fnm + "'" + " !")
 	}
 
 	return nil
@@ -95,43 +95,43 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 
 	f, err := os.Open(fnm)
 	if err == nil {
-		done := util.NewLoader("Decoding Dictionary from '"+fnm+"'", true)
+		util.Log("Decoding Dictionary from '" + fnm + "'" + "...")
 		d := gob.NewDecoder(f)
 		err = d.Decode(&dict)
 		if err != nil {
 			return nil, err
 		}
 		f.Close()
-		done <- true
+		util.Log("Decoding Dictionary from '" + fnm + "'" + " !")
 	} else {
-		done := util.NewLoader("Reading Dictionary from AWS", true)
+		util.Log("Reading Dictionary from AWS" + "...")
 		err = t.aws.Read("transku/"+fnm, &dict)
 		if err != nil {
 			return nil, err
 		}
-		done <- true
+		util.Log("Reading Dictionary from AWS" + " !")
 	}
 
-	done := util.NewLoader("Initializing Dictionary", true)
+	util.Log("Initializing Dictionary" + "...")
 	d := newDictionary(dict)
-	done <- true
+	util.Log("Initializing Dictionary" + " !")
 
-	done = util.NewLoader("Adding words/phrases to Dictionary", true)
+	util.Log("Adding words/phrases to Dictionary" + "...")
 	d.GoAdd(t.prods)
-	done <- true
+	util.Log("Adding words/phrases to Dictionary" + " !")
 
 	fmt.Println(d.GetPrice())
 
-	done = util.NewLoader("Translating words in Dictionary", true)
+	util.Log("Translating words in Dictionary" + "...")
 	tag, err := language.Parse(r.BCP47)
 	if err != nil {
 		return nil, err
 	}
 	t.rose.Destination(tag)
 	d.GoFillAll(t.rose.MustTranslate)
-	done <- true
+	util.Log("Translating words in Dictionary" + " !")
 
-	done = util.NewLoader("Encoding Dictionary to '"+fnm+"'", true)
+	util.Log("Encoding Dictionary to '" + fnm + "'" + "...")
 	f, err = os.Create(fnm)
 	if err != nil {
 		return nil, err
@@ -141,39 +141,39 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	if err != nil {
 		return nil, err
 	}
-	done <- true
+	util.Log("Encoding Dictionary to '" + fnm + "'" + " !")
 
-	done = util.NewLoader("Writing Dictionary to AWS", true)
+	util.Log("Writing Dictionary to AWS" + "...")
 	err = t.aws.Write("transku/"+fnm, dict)
 	if err != nil {
 		return nil, err
 	}
-	done <- true
+	util.Log("Writing Dictionary to AWS" + " !")
 
 	return d, nil
 }
 
 // ApplyDict translates ChannelAdvisor data from English to another language.
 func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
-	done := util.NewLoader("Translating products using Dictionary", true)
+	util.Log("Translating products using Dictionary" + "...")
 	newProds := dict.GoTransAll(t.prods)
-	done <- true
+	util.Log("Translating products using Dictionary" + " !")
 
-	done = util.NewLoader("Converting translated to international format", true)
+	util.Log("Converting translated to international format" + "...")
 	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+strings.ToUpper(r.ChannelTag))
-	done <- true
+	util.Log("Converting translated to international format" + " !")
 
 	return ip
 }
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
 func (t TransKU) WriteChannelAdvisor(ip IntlProds) error {
-	done := util.NewLoader("Writing binary CSV to ChannelAdvisor", true)
+	util.Log("Writing binary CSV to ChannelAdvisor" + "...")
 	err := t.ca.SendBinaryCSV(ip.GetCSVLayout())
 	if err != nil {
 		return err
 	}
-	done <- true
+	util.Log("Writing binary CSV to ChannelAdvisor" + " !")
 
 	return nil
 }
