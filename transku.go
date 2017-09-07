@@ -53,12 +53,9 @@ func (t *TransKU) InitGosetta() error {
 func (t *TransKU) ReadChannelAdvisor() error {
 	fnm := "prods.gob"
 
-	done := util.NewLoader("Opening " + fnm)
 	f, err := os.Open(fnm)
-	done <- true
-
 	if err == nil {
-		done = util.NewLoader("Decoding product data from '" + fnm + "'")
+		done := util.NewLoader("Decoding product data from '" + fnm + "'")
 		d := gob.NewDecoder(f)
 		err = d.Decode(&t.prods)
 		if err != nil {
@@ -66,7 +63,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 		}
 		done <- true
 	} else {
-		done = util.NewLoader("Reading product data from ChannelAdvisor")
+		done := util.NewLoader("Reading product data from ChannelAdvisor")
 		prods, err := t.ca.GetCAData(t.createDate)
 		if err != nil {
 			return err
