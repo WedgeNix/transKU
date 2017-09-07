@@ -17,7 +17,7 @@ import (
 
 // InitChapi creates a new instance for translating English ChannelAdvisor data.
 func InitChapi(start time.Time) (*TransKU, error) {
-	done := util.NewLoader("Initializing transKU")
+	done := util.NewLoader("Initializing transKU", true)
 	ca, err := chapi.New()
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 
 	f, err := os.Open(fnm)
 	if err == nil {
-		done := util.NewLoader("Decoding product data from '" + fnm + "'")
+		done := util.NewLoader("Decoding product data from '"+fnm+"'", true)
 		d := gob.NewDecoder(f)
 		err = d.Decode(&t.prods)
 		if err != nil {
@@ -63,7 +63,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 		}
 		done <- true
 	} else {
-		done := util.NewLoader("Reading product data from ChannelAdvisor")
+		done := util.NewLoader("Reading product data from ChannelAdvisor", true)
 		prods, err := t.ca.GetCAData(t.createDate)
 		if err != nil {
 			return err
@@ -76,7 +76,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 			return err
 		}
 
-		done = util.NewLoader("Encoding product data to '" + fnm + "'")
+		done = util.NewLoader("Encoding product data to '"+fnm+"'", true)
 		e := gob.NewEncoder(f)
 		err = e.Encode(prods)
 		if err != nil {
@@ -95,7 +95,7 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 
 	f, err := os.Open(fnm)
 	if err == nil {
-		done := util.NewLoader("Decoding Dictionary from '" + fnm + "'")
+		done := util.NewLoader("Decoding Dictionary from '"+fnm+"'", true)
 		d := gob.NewDecoder(f)
 		err = d.Decode(&dict)
 		if err != nil {
@@ -104,7 +104,7 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 		f.Close()
 		done <- true
 	} else {
-		done := util.NewLoader("Reading Dictionary from AWS")
+		done := util.NewLoader("Reading Dictionary from AWS", true)
 		err = t.aws.Read("transku/"+fnm, &dict)
 		if err != nil {
 			return nil, err
@@ -112,17 +112,17 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 		done <- true
 	}
 
-	done := util.NewLoader("Initializing Dictionary")
+	done := util.NewLoader("Initializing Dictionary", true)
 	d := newDictionary(dict)
 	done <- true
 
-	done = util.NewLoader("Adding words/phrases to Dictionary")
+	done = util.NewLoader("Adding words/phrases to Dictionary", true)
 	d.GoAdd(t.prods)
 	done <- true
 
 	fmt.Println(d.GetPrice())
 
-	done = util.NewLoader("Translating words in Dictionary")
+	done = util.NewLoader("Translating words in Dictionary", true)
 	tag, err := language.Parse(r.BCP47)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	d.GoFillAll(t.rose.MustTranslate)
 	done <- true
 
-	done = util.NewLoader("Encoding Dictionary to '" + fnm + "'")
+	done = util.NewLoader("Encoding Dictionary to '"+fnm+"'", true)
 	f, err = os.Create(fnm)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	}
 	done <- true
 
-	done = util.NewLoader("Writing Dictionary to AWS")
+	done = util.NewLoader("Writing Dictionary to AWS", true)
 	err = t.aws.Write("transku/"+fnm, dict)
 	if err != nil {
 		return nil, err
@@ -155,11 +155,11 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 
 // ApplyDict translates ChannelAdvisor data from English to another language.
 func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
-	done := util.NewLoader("Translating products using Dictionary")
+	done := util.NewLoader("Translating products using Dictionary", true)
 	newProds := dict.GoTransAll(t.prods)
 	done <- true
 
-	done = util.NewLoader("Converting translated to international format")
+	done = util.NewLoader("Converting translated to international format", true)
 	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+strings.ToUpper(r.ChannelTag))
 	done <- true
 
@@ -168,7 +168,7 @@ func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.
 func (t TransKU) WriteChannelAdvisor(ip IntlProds) error {
-	done := util.NewLoader("Writing binary CSV to ChannelAdvisor")
+	done := util.NewLoader("Writing binary CSV to ChannelAdvisor", true)
 	err := t.ca.SendBinaryCSV(ip.GetCSVLayout())
 	if err != nil {
 		return err
