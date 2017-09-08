@@ -75,7 +75,6 @@ func (dict *Dictionary) filter(p *chapi.Product) []*string {
 	}
 	for i := range p.Attributes {
 		if FilterAttr[p.Attributes[i].Name] {
-			fmt.Print(p.Attributes[i].Value)
 			fill = append(fill, &p.Attributes[i].Value)
 		}
 	}
