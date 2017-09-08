@@ -75,6 +75,7 @@ func (dict *Dictionary) filter(p *chapi.Product) []*string {
 	}
 	for i := range p.Attributes {
 		if FilterAttr[p.Attributes[i].Name] {
+			fmt.Print(p.Attributes[i].Value)
 			fill = append(fill, &p.Attributes[i].Value)
 		}
 	}
@@ -198,6 +199,12 @@ func (dict *Dictionary) GoTransAll(prods []chapi.Product) []chapi.Product {
 	for i, prod := range prods {
 		go func(i int, prod chapi.Product) {
 			defer dict.jobs.Done()
+
+			var attrs []chapi.AttributeValue
+			for _, attr := range prod.Attributes {
+				attrs = append(attrs, attr)
+			}
+			prod.Attributes = attrs
 
 			fields := dict.filter(&prod)
 
