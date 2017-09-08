@@ -1,9 +1,7 @@
 package transku
 
 import (
-	"encoding/gob"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -84,6 +82,7 @@ func (t *TransKU) ReadChannelAdvisor() error {
 	// }
 	// util.Log("Encoding product data to '" + fnm + "'" + " !")
 	// }
+	// f.Close()
 
 	return nil
 }
@@ -93,34 +92,47 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	fnm := strings.ToLower(r.ChannelTag + ".gob")
 	dict := lookup{}
 
-	f, err := os.Open(fnm)
-	if err == nil {
-		util.Log("Decoding Dictionary from '" + fnm + "'" + "...")
-		d := gob.NewDecoder(f)
-		err = d.Decode(&dict)
-		if err != nil {
-			return nil, err
-		}
-		f.Close()
-		util.Log("Decoding Dictionary from '" + fnm + "'" + " !")
-	} else {
-		util.Log("Reading Dictionary from AWS" + "...")
-		err = t.aws.Read("transku/"+fnm, &dict)
-		if err != nil {
-			return nil, err
-		}
-		util.Log("Reading Dictionary from AWS" + " !")
+	// f, err := os.Open(fnm)
+	// if err == nil {
+	// 	util.Log("Decoding Dictionary from '" + fnm + "'" + "...")
+	// 	d := gob.NewDecoder(f)
+	// 	err = d.Decode(&dict)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	f.Close()
+	// 	util.Log("Decoding Dictionary from '" + fnm + "'" + " !")
+	// } else {
+
+	util.Log("Reading Dictionary from AWS" + "...")
+	err := t.aws.Read("transku/"+fnm, &dict)
+	if err != nil {
+		return nil, err
 	}
+	util.Log("Reading Dictionary from AWS" + " !")
+	// }
+
+	// fmt.Println("[check your memory usage] aws.Read")
+	// time.Sleep(10 * time.Second)
 
 	util.Log("Initializing Dictionary" + "...")
 	d := newDictionary(dict)
 	util.Log("Initializing Dictionary" + " !")
 
+	// fmt.Println("[check your memory usage] newDictionary")
+	// time.Sleep(10 * time.Second)
+
 	util.Log("Adding words/phrases to Dictionary" + "...")
 	d.GoAdd(t.prods)
 	util.Log("Adding words/phrases to Dictionary" + " !")
 
+	// fmt.Println("[check your memory usage] GoAdd")
+	// time.Sleep(10 * time.Second)
+
 	fmt.Println(d.GetPrice())
+
+	// fmt.Println("[check your memory usage] GetPrice")
+	// time.Sleep(10 * time.Second)
 
 	util.Log("Translating words in Dictionary" + "...")
 	tag, err := language.Parse(r.BCP47)
@@ -131,17 +143,23 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	d.GoFillAll(t.rose.MustTranslate)
 	util.Log("Translating words in Dictionary" + " !")
 
-	util.Log("Encoding Dictionary to '" + fnm + "'" + "...")
-	f, err = os.Create(fnm)
-	if err != nil {
-		return nil, err
-	}
-	e := gob.NewEncoder(f)
-	err = e.Encode(dict)
-	if err != nil {
-		return nil, err
-	}
-	util.Log("Encoding Dictionary to '" + fnm + "'" + " !")
+	// fmt.Println("[check your memory usage] GoFillAll")
+	// time.Sleep(10 * time.Second)
+
+	// util.Log("Encoding Dictionary to '" + fnm + "'" + "...")
+	// f, err := os.Create(fnm)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// e := gob.NewEncoder(f)
+	// err = e.Encode(dict)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// util.Log("Encoding Dictionary to '" + fnm + "'" + " !")
+
+	// fmt.Println("[check your memory usage] Encode dict")
+	// time.Sleep(10 * time.Second)
 
 	util.Log("Writing Dictionary to AWS" + "...")
 	err = t.aws.Write("transku/"+fnm, dict)
@@ -149,6 +167,9 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 		return nil, err
 	}
 	util.Log("Writing Dictionary to AWS" + " !")
+
+	// fmt.Println("[check your memory usage] Write aws")
+	// time.Sleep(240 * time.Second)
 
 	return d, nil
 }
