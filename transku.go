@@ -1,7 +1,9 @@
 package transku
 
 import (
+	"encoding/gob"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -49,40 +51,40 @@ func (t *TransKU) InitGosetta() error {
 
 // ReadChannelAdvisor reads ChannelAdvisor product information in for parsing.
 func (t *TransKU) ReadChannelAdvisor() error {
-	// fnm := "prods.gob"
+	fnm := "prods.gob"
 
-	// f, err := os.Open(fnm)
-	// if err == nil {
-	// 	util.Log("Decoding product data from '" + fnm + "'" + "...")
-	// 	d := gob.NewDecoder(f)
-	// 	err = d.Decode(&t.prods)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	util.Log("Decoding product data from '" + fnm + "'" + " !")
-	// } else {
-	util.Log("Reading product data from ChannelAdvisor" + "...")
-	prods, err := t.ca.GetCAData(t.createDate)
-	if err != nil {
-		return err
+	f, err := os.Open(fnm)
+	if err == nil {
+		util.Log("Decoding product data from '" + fnm + "'" + "...")
+		d := gob.NewDecoder(f)
+		err = d.Decode(&t.prods)
+		if err != nil {
+			return err
+		}
+		util.Log("Decoding product data from '" + fnm + "'" + " !")
+	} else {
+		util.Log("Reading product data from ChannelAdvisor" + "...")
+		prods, err := t.ca.GetCAData(t.createDate)
+		if err != nil {
+			return err
+		}
+		t.prods = prods
+		util.Log("Reading product data from ChannelAdvisor" + " !")
+
+		f, err = os.Create(fnm)
+		if err != nil {
+			return err
+		}
+
+		util.Log("Encoding product data to '" + fnm + "'" + "...")
+		e := gob.NewEncoder(f)
+		err = e.Encode(prods)
+		if err != nil {
+			return err
+		}
+		util.Log("Encoding product data to '" + fnm + "'" + " !")
 	}
-	t.prods = prods
-	util.Log("Reading product data from ChannelAdvisor" + " !")
-
-	// f, err = os.Create(fnm)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// util.Log("Encoding product data to '" + fnm + "'" + "...")
-	// e := gob.NewEncoder(f)
-	// err = e.Encode(prods)
-	// if err != nil {
-	// 	return err
-	// }
-	// util.Log("Encoding product data to '" + fnm + "'" + " !")
-	// }
-	// f.Close()
+	f.Close()
 
 	return nil
 }
@@ -180,9 +182,11 @@ func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
 	newProds := dict.GoTransAll(t.prods)
 	util.Log("Translating products using Dictionary" + " !")
 
-	util.Log("Converting translated to international format" + "...")
-	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+strings.ToUpper(r.ChannelTag))
-	util.Log("Converting translated to international format" + " !")
+	caTag := strings.ToUpper(r.ChannelTag)
+
+	util.Log("Converting translated to international format [" + caTag + "]" + "...")
+	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+caTag)
+	util.Log("Converting translated to international format [" + caTag + "]" + " !")
 
 	return ip
 }

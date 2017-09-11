@@ -4,8 +4,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/WedgeNix/chapi"
+	"github.com/WedgeNix/util"
 )
 
 // IntlProds holds info for international products.
@@ -64,8 +66,8 @@ func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds 
 	ip := IntlProds{profileID: profileID}
 
 	ps := parentSKUs{}
+	for i, prod := range prods {
 
-	for _, prod := range prods {
 		p := PreCSV{
 			AuctionTitle:        prod.Title,
 			InventoryNumber:     prod.Sku,
@@ -84,6 +86,7 @@ func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds 
 			Labels:              label,
 			Classification:      prod.Classification,
 		}
+
 		urls := []string{}
 		for _, img := range prod.Images {
 			urls = append(urls, img.URL)
@@ -144,6 +147,7 @@ func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds 
 		}
 
 		ip.pres = append(ip.pres, p)
+		util.Log(i+1, "/", len(prods))
 	}
 
 	return ip
@@ -303,26 +307,29 @@ func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 type parentSKUs map[int]string
 
 func (ps parentSKUs) getVariationParentSKU(prod chapi.Product, prods []chapi.Product) string {
+	// t := time.Now()
+
 	if prod.IsParent {
+		// util.Log("[getVariationParentSKU] IsParent")
 		return "Parent"
 	}
 	sku, exists := ps[prod.ParentProductID]
 	if exists {
+		// util.Log("[getVariationParentSKU] CacheHit")
 		return sku
 	}
 
 	skuc := make(chan string)
 
 	var misswg sync.WaitGroup
-	miss := make(chan int, 1)
-	miss <- 0
+	var miss uint64
 
 	for _, p := range prods {
-		p := p
 		misswg.Add(1)
+		p := p
 		go func() {
 			if prod.ParentProductID != p.ID {
-				miss <- 1 + <-miss
+				atomic.AddUint64(&miss, 1)
 				misswg.Done()
 				return
 			}
@@ -332,9 +339,16 @@ func (ps parentSKUs) getVariationParentSKU(prod chapi.Product, prods []chapi.Pro
 	}
 
 	misswg.Wait()
-	if len(prods) == <-miss {
-		return ""
+	if int(atomic.LoadUint64(&miss)) == len(prods) {
+		sku = ""
+		ps[prod.ParentProductID] = sku
+		// util.Log("[getVariationParentSKU] [miss] ", time.Since(t).Nanoseconds(), "ns")
+		return sku
 	}
 
-	return <-skuc
+	sku = <-skuc
+	ps[prod.ParentProductID] = sku
+
+	// util.Log("[getVariationParentSKU] ", time.Since(t).Nanoseconds(), "ns")
+	return sku
 }
