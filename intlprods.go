@@ -59,6 +59,7 @@ type PreCSV struct {
 	FeatureBullet4      string
 	FeatureBullet5      string
 	FeatureBullet6      string
+	ProductType         string
 }
 
 // New creates proper international products.
@@ -143,6 +144,8 @@ func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds 
 				p.FeatureBullet5 = attr.Value
 			case `FeatureBullet6`:
 				p.FeatureBullet6 = attr.Value
+			case `Product Type`:
+				p.ProductType = attr.Value
 			}
 		}
 
@@ -222,6 +225,8 @@ func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 		`Attribute23Value`,
 		`Attribute24Name`,
 		`Attribute24Value`,
+		`Attribute25Name`,
+		`Attribute25Value`,
 	}
 
 	work := sync.WaitGroup{}
@@ -296,6 +301,8 @@ func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 				pre.FeatureBullet5,
 				`FeatureBullet6`,
 				pre.FeatureBullet6,
+				`Product Type`,
+				pre.ProductType,
 			}
 		}(i+1, pre)
 	}

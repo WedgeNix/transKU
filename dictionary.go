@@ -50,6 +50,7 @@ var (
 		`FeatureBullet4`:         true,
 		`FeatureBullet5`:         true,
 		`FeatureBullet6`:         true,
+		`Product Type`:           false,
 	}
 )
 
