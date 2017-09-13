@@ -107,7 +107,7 @@ func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 		`Variation Parent SKU`,
 		`Weight`,
 	}
-	for i := range ip.pres[0].attributes {
+	for i := range make([]int, len(FilterAttr)) {
 		n := strconv.Itoa(i + 1)
 		layout[0] = append(layout[0], []string{
 			`Attribute` + n + `Name`,
