@@ -77,9 +77,6 @@ func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds 
 			if !exists {
 				continue
 			}
-			if attr.Name == `AMZTitle` {
-				println(`intlprods.go / newIntlProds /`, attr.Value)
-			}
 			p.attributes = append(p.attributes, attrkv{attr.Name, attr.Value})
 		}
 

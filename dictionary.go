@@ -7,6 +7,7 @@ import (
 	"golang.org/x/text/currency"
 
 	"github.com/WedgeNix/chapi"
+	"github.com/WedgeNix/util"
 )
 
 func newDictionary(cache ...lookup) *Dictionary {
@@ -77,7 +78,7 @@ var (
 	}
 )
 
-func (dict *Dictionary) filter(p *chapi.Product) []*string {
+func (dict *Dictionary) filter(p *chapi.Product) ([]*string, int) {
 	fill := []*string{
 	// &p.Title,
 	// &p.Sku,
@@ -97,15 +98,16 @@ func (dict *Dictionary) filter(p *chapi.Product) []*string {
 	// &p.Labels,
 	// &p.Classification,
 	}
+	titleIdx := -1
 	for i := range p.Attributes {
 		if FilterAttr[p.Attributes[i].Name] {
 			if p.Attributes[i].Name == `AMZTitle` {
-				println(`dictionary.go / filter /`, p.Attributes[i].Value)
+				titleIdx = i
 			}
 			fill = append(fill, &p.Attributes[i].Value)
 		}
 	}
-	return fill
+	return fill, titleIdx
 }
 
 // GoAdd adds specific product fields into the Dictionary (concurrently).
@@ -113,20 +115,38 @@ func (dict *Dictionary) GoAdd(prods []chapi.Product) {
 	dict.jobs.Add(len(prods))
 
 	for _, prod := range prods {
-		if !prod.IsParent {
-			dict.jobs.Done()
-			continue
-		}
+		// if !prod.IsParent {
+		// 	dict.jobs.Done()
+		// 	continue
+		// }
 		go func(prod chapi.Product) {
 			defer dict.jobs.Done()
 
-			fields := dict.filter(&prod)
+			fields, titleIdx := dict.filter(&prod)
 
-			for _, field := range fields {
-				dict.stripAndAddText(*field, prod)
+			for i := range fields {
+				head, tail := getChildTitleSize(fields, i, titleIdx)
+				if len(tail) == 0 {
+					dict.stripAndAddText(head, prod)
+				} else {
+					dict.stripAndAddText(tail, prod)
+				}
 			}
 		}(prod)
 	}
+}
+
+func getChildTitleSize(fields []*string, i, titleIdx int) (string, string) {
+	text := *fields[i]
+	if i != titleIdx {
+		return text, ""
+	}
+	sizeIdx := strings.LastIndex(text, "-")
+	if sizeIdx == -1 || len(text)-1 < sizeIdx+1 {
+		return text, ""
+	}
+	util.Log("[Found child size in title]")
+	return text[:sizeIdx], text[sizeIdx+1:]
 }
 
 func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phrases bag, toks string) {
@@ -152,7 +172,15 @@ func strip(text string, prod chapi.Product, onlyPhrases bool) (tags, brands, phr
 func (dict *Dictionary) stripAndAddText(text string, prod chapi.Product) {
 	_, _, phrases, _ := strip(text, prod, true)
 
+	// if text == `MyPakage Men's Weekday Boxer Brief Underwear-Small` {
+	// 	println(`stripAndAddText(`, text, `, ...)`)
+	// }
+
 	for _, phrase := range phrases.items {
+		// if phrase == `Men's Weekday Boxer Brief Underwear-Small` {
+		// 	println(`stripAndAddText:`, phrase)
+		// }
+
 		dict.lock.RLock()
 		_, exists := dict.cache[phrase]
 		dict.lock.RUnlock()
@@ -207,7 +235,11 @@ func (dict *Dictionary) swapNShift(toks string, b bag) string {
 	for _, itm := range b.items {
 		if b.tlate {
 			dict.lock.RLock()
-			itm = dict.cache[itm]
+			var found bool
+			itm, found = dict.cache[itm]
+			if !found {
+				panic("did not find `" + itm + "` in dictionary")
+			}
 			dict.lock.RUnlock()
 		}
 		toks = strings.Replace(toks, b.tok, itm, 1)
@@ -232,14 +264,33 @@ func (dict *Dictionary) GoTransAll(prods []chapi.Product) []chapi.Product {
 			}
 			prod.Attributes = attrs
 
-			fields := dict.filter(&prod)
+			fields, titleIdx := dict.filter(&prod)
 
-			for _, field := range fields {
-				tags, brands, phrases, toks := strip(*field, prod, false)
+			for i, field := range fields {
+				is := *field == `MyPakage Men's Weekday Boxer Brief Underwear-Small`
 
+				if is {
+					println(`ORIGINAL:`, *field)
+				}
+
+				head, tail := getChildTitleSize(fields, i, titleIdx)
+
+				tags, brands, phrases, toks := strip(head, prod, false)
 				toks = dict.swapNShift(toks, tags)
 				toks = dict.swapNShift(toks, brands)
 				toks = dict.swapNShift(toks, phrases)
+
+				if len(tail) > 0 {
+					tags, brands, phrases, tailtoks := strip(tail, prod, false)
+					tailtoks = dict.swapNShift(tailtoks, tags)
+					tailtoks = dict.swapNShift(tailtoks, brands)
+					tailtoks = dict.swapNShift(tailtoks, phrases)
+					toks += "-" + tailtoks
+				}
+
+				if is {
+					println(`TRANSLATED:`, toks)
+				}
 
 				*field = toks
 			}
