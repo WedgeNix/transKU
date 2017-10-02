@@ -99,6 +99,9 @@ func (dict *Dictionary) filter(p *chapi.Product) []*string {
 	}
 	for i := range p.Attributes {
 		if FilterAttr[p.Attributes[i].Name] {
+			if p.Attributes[i].Name == `AMZTitle` {
+				println(`dictionary.go / filter /`, p.Attributes[i].Value)
+			}
 			fill = append(fill, &p.Attributes[i].Value)
 		}
 	}
