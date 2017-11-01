@@ -4,6 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/text/language"
+
 	"github.com/WedgeNix/awsapi"
 	"github.com/WedgeNix/chapi"
 	"github.com/WedgeNix/gosetta"
@@ -31,6 +33,7 @@ type Dictionary struct {
 	lock         sync.RWMutex
 	cache        lookup
 	cacheCharCnt int
+	lang         language.Tag
 }
 
 type lookup map[string]string

@@ -118,7 +118,11 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	// time.Sleep(10 * time.Second)
 
 	util.Log("Initializing Dictionary" + "...")
-	d := newDictionary(dict)
+	tag, err := language.Parse(r.BCP47)
+	if err != nil {
+		return nil, err
+	}
+	d := newDictionary(tag, dict)
 	util.Log("Initializing Dictionary" + " !")
 
 	// fmt.Println("[check your memory usage] newDictionary")
@@ -137,10 +141,6 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 	// time.Sleep(10 * time.Second)
 
 	util.Log("Translating words in Dictionary" + "...")
-	tag, err := language.Parse(r.BCP47)
-	if err != nil {
-		return nil, err
-	}
 	t.rose.Destination(tag)
 	d.GoFillAll(t.rose.MustTranslate)
 	util.Log("Translating words in Dictionary" + " !")
@@ -177,7 +177,7 @@ func (t TransKU) CreateDict(r Region) (*Dictionary, error) {
 }
 
 // ApplyDict translates ChannelAdvisor data from English to another language.
-func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
+func (t TransKU) ApplyDict(dict *Dictionary, r Region) (IntlProds, error) {
 	util.Log("Translating products using Dictionary" + "...")
 	newProds := dict.GoTransAll(t.prods)
 	util.Log("Translating products using Dictionary" + " !")
@@ -185,10 +185,14 @@ func (t TransKU) ApplyDict(dict *Dictionary, r Region) IntlProds {
 	caTag := strings.ToUpper(r.ChannelTag)
 
 	util.Log("Converting translated to international format [" + caTag + "]" + "...")
-	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+caTag)
+	lang, err := language.Parse(r.BCP47)
+	if err != nil {
+		return IntlProds{}, err
+	}
+	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+caTag, lang)
 	util.Log("Converting translated to international format [" + caTag + "]" + " !")
 
-	return ip
+	return ip, nil
 }
 
 // WriteChannelAdvisor writes to a ChannelAdvisor region database.

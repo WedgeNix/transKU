@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"golang.org/x/text/currency"
+	"golang.org/x/text/language"
 
 	"github.com/WedgeNix/chapi"
 	"github.com/WedgeNix/util"
 )
 
-func newDictionary(cache ...lookup) *Dictionary {
-	dict := &Dictionary{cache: lookup{}}
+func newDictionary(lang language.Tag, cache ...lookup) *Dictionary {
+	dict := &Dictionary{cache: lookup{}, lang: lang}
 	if len(cache) > 0 {
 		dict.cache = cache[0]
 		dict.cacheCharCnt = dict.getCharCnt()
@@ -125,20 +126,19 @@ func (dict *Dictionary) GoAdd(prods []chapi.Product) {
 			fields, titleIdx := dict.filter(&prod)
 
 			for i := range fields {
-				head, tail := getChildTitleSize(fields, i, titleIdx)
-				if len(tail) == 0 {
-					dict.stripAndAddText(head, prod)
-				} else {
+				head, tail := getChildTitleSize(prod, fields, i, titleIdx)
+				if len(tail) > 0 {
 					dict.stripAndAddText(tail, prod)
 				}
+				dict.stripAndAddText(head, prod)
 			}
 		}(prod)
 	}
 }
 
-func getChildTitleSize(fields []*string, i, titleIdx int) (string, string) {
+func getChildTitleSize(prod chapi.Product, fields []*string, i, titleIdx int) (string, string) {
 	text := *fields[i]
-	if i != titleIdx {
+	if i != titleIdx || prod.IsParent {
 		return text, ""
 	}
 	sizeIdx := strings.LastIndex(text, "-")
@@ -216,7 +216,10 @@ func (dict *Dictionary) GoFillAll(cacheMiss func(string) string) {
 			defer dict.jobs.Done()
 			// fmt.Print(`X`)
 
-			tlate := cacheMiss(word)
+			tlate := word
+			if dict.lang != language.English {
+				tlate = cacheMiss(word)
+			}
 			// fmt.Print(word + `>>` + tlate)
 
 			e := <-newEntries
@@ -235,12 +238,12 @@ func (dict *Dictionary) swapNShift(toks string, b bag) string {
 	for _, itm := range b.items {
 		if b.tlate {
 			dict.lock.RLock()
-			var found bool
-			itm, found = dict.cache[itm]
+			tlate, found := dict.cache[itm]
 			if !found {
 				panic("did not find `" + itm + "` in dictionary")
 			}
 			dict.lock.RUnlock()
+			itm = tlate
 		}
 		toks = strings.Replace(toks, b.tok, itm, 1)
 	}
@@ -267,13 +270,13 @@ func (dict *Dictionary) GoTransAll(prods []chapi.Product) []chapi.Product {
 			fields, titleIdx := dict.filter(&prod)
 
 			for i, field := range fields {
-				is := *field == `MyPakage Men's Weekday Boxer Brief Underwear-Small`
+				// is := *field == `MyPakage Men's Weekday Boxer Brief Underwear-Small`
 
-				if is {
-					println(`ORIGINAL:`, *field)
-				}
+				// if is {
+				// 	println(`ORIGINAL:`, *field)
+				// }
 
-				head, tail := getChildTitleSize(fields, i, titleIdx)
+				head, tail := getChildTitleSize(prod, fields, i, titleIdx)
 
 				tags, brands, phrases, toks := strip(head, prod, false)
 				toks = dict.swapNShift(toks, tags)
@@ -288,9 +291,9 @@ func (dict *Dictionary) GoTransAll(prods []chapi.Product) []chapi.Product {
 					toks += "-" + tailtoks
 				}
 
-				if is {
-					println(`TRANSLATED:`, toks)
-				}
+				// if is {
+				// 	println(`TRANSLATED:`, toks)
+				// }
 
 				*field = toks
 			}

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/text/language"
+
 	"github.com/WedgeNix/chapi"
 	"github.com/WedgeNix/util"
 )
@@ -43,11 +45,15 @@ type PreCSV struct {
 }
 
 // New creates proper international products.
-func newIntlProds(prods []chapi.Product, profileID int, label string) IntlProds {
+func newIntlProds(prods []chapi.Product, profileID int, label string, lang language.Tag) IntlProds {
 	ip := IntlProds{profileID: profileID}
 
 	ps := parentSKUs{}
 	for i, prod := range prods {
+
+		if lang == language.English {
+			prod.Weight /= 2.20462
+		}
 
 		p := PreCSV{
 			ASIN:               prod.ASIN,
