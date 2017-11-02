@@ -189,7 +189,10 @@ func (t TransKU) ApplyDict(dict *Dictionary, r Region) (IntlProds, error) {
 	if err != nil {
 		return IntlProds{}, err
 	}
-	ip := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+caTag, lang)
+	ip, err := newIntlProds(newProds, r.ProfileID, `Amazon Seller Central - `+caTag, lang)
+	if err != nil {
+		return ip, err
+	}
 	util.Log("Converting translated to international format [" + caTag + "]" + " !")
 
 	return ip, nil

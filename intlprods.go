@@ -1,6 +1,8 @@
 package transku
 
 import (
+	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,13 +27,12 @@ type attrkv struct {
 
 // PreCSV is the look of what will be sent over to ChannelAdvisor regions.
 type PreCSV struct {
-	ASIN,
+	InventoryNumber,
 	AuctionTitle,
 	Brand,
 	BuyItNowPrice,
 	Classification,
 	Description,
-	InventoryNumber,
 	Labels,
 	PictureURLs,
 	RelationshipName,
@@ -45,7 +46,7 @@ type PreCSV struct {
 }
 
 // New creates proper international products.
-func newIntlProds(prods []chapi.Product, profileID int, label string, lang language.Tag) IntlProds {
+func newIntlProds(prods []chapi.Product, profileID int, label string, lang language.Tag) (IntlProds, error) {
 	ip := IntlProds{profileID: profileID}
 
 	ps := parentSKUs{}
@@ -55,14 +56,17 @@ func newIntlProds(prods []chapi.Product, profileID int, label string, lang langu
 			prod.Weight /= 2.20462
 		}
 
+		if len(prod.Sku) == 0 {
+			return ip, errors.New("empty inventory number (sku) @ index-" + strconv.Itoa(i))
+		}
+
 		p := PreCSV{
-			ASIN:               prod.ASIN,
+			InventoryNumber:    prod.Sku,
 			AuctionTitle:       prod.Title,
 			Brand:              prod.Brand,
 			BuyItNowPrice:      strconv.FormatFloat(prod.BuyItNowPrice, 'f', 2, 64),
 			Classification:     prod.Classification,
 			Description:        prod.Description,
-			InventoryNumber:    prod.Sku,
 			Labels:             label,
 			RelationshipName:   prod.RelationshipName,
 			RetailPrice:        strconv.FormatFloat(prod.RetailPrice, 'f', 2, 64),
@@ -72,9 +76,49 @@ func newIntlProds(prods []chapi.Product, profileID int, label string, lang langu
 			Weight:             strconv.FormatFloat(prod.Weight, 'f', 2, 64),
 		}
 
+		if len(p.AuctionTitle) == 0 {
+			return ip, errors.New("empty 'AuctionTitle'")
+		}
+		if len(p.Brand) == 0 {
+			return ip, errors.New("empty 'Brand'")
+		}
+		if len(p.BuyItNowPrice) == 0 {
+			return ip, errors.New("empty 'BuyItNowPrice'")
+		}
+		if len(p.Classification) == 0 {
+			return ip, errors.New("empty 'Classification'")
+		}
+		if len(p.Description) == 0 {
+			return ip, errors.New("empty 'Description'")
+		}
+		if len(p.Labels) == 0 {
+			return ip, errors.New("empty 'Labels'")
+		}
+		if len(p.RelationshipName) == 0 {
+			return ip, errors.New("empty 'RelationshipName'")
+		}
+		if len(p.RetailPrice) == 0 {
+			return ip, errors.New("empty 'RetailPrice'")
+		}
+		if len(p.SellerCost) == 0 {
+			return ip, errors.New("empty 'SellerCost'")
+		}
+		if len(p.UPC) == 0 {
+			return ip, errors.New("empty 'UPC'")
+		}
+		if len(p.Weight) == 0 {
+			return ip, errors.New("empty 'Weight'")
+		}
+		if len(p.VariationParentSKU) == 0 {
+			log.Println("empty 'VariationParentSKU' for " + p.InventoryNumber)
+		}
+
 		urls := []string{}
 		for _, img := range prod.Images {
 			urls = append(urls, img.URL)
+		}
+		if len(urls) == 0 {
+			return ip, errors.New("no 'PictureURLs' found")
 		}
 		p.PictureURLs = `"` + strings.Join(urls, ",") + `"`
 
@@ -90,20 +134,19 @@ func newIntlProds(prods []chapi.Product, profileID int, label string, lang langu
 		util.Log(i+1, "/", len(prods))
 	}
 
-	return ip
+	return ip, nil
 }
 
 // GetCSVLayout formats the data to suit a CSV layout and gives the profileID.
 func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 	layout := make([][]string, len(ip.pres)+1)
 	layout[0] = []string{
-		`ASIN`,
+		`Inventory Number`,
 		`Auction Title`,
 		`Brand`,
 		`Buy It Now Price`,
 		`Classification`,
 		`Description`,
-		`Inventory Number`,
 		`Labels`,
 		`Picture URLs`,
 		`Relationship Name`,
@@ -128,13 +171,12 @@ func (ip IntlProds) GetCSVLayout() ([][]string, int) {
 		go func(i int, pre PreCSV) {
 			defer work.Done()
 			layout[i] = []string{
-				pre.ASIN,
+				pre.InventoryNumber,
 				pre.AuctionTitle,
 				pre.Brand,
 				pre.BuyItNowPrice,
 				pre.Classification,
 				pre.Description,
-				pre.InventoryNumber,
 				pre.Labels,
 				pre.PictureURLs,
 				pre.RelationshipName,
